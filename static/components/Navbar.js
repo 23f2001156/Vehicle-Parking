@@ -1,9 +1,19 @@
 export default {
   props: ['loggedIn'],
+  computed: {
+    
+    isUserLoggedIn() {
+      return this.loggedIn || localStorage.getItem('token')
+    },
+    userRole() {
+      return localStorage.getItem('role')
+    }
+  },
   methods: {
     logout() {
       localStorage.removeItem('token')
       localStorage.removeItem('role')
+      localStorage.removeItem('user')
       this.$emit('logout')
       this.$router.push('/')
     }
@@ -14,19 +24,26 @@ export default {
         <router-link class="navbar-brand" to="/">FastLogistics</router-link>
         <div class="collapse navbar-collapse">
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-            <li class="nav-item" v-if="!loggedIn">
+            <!-- Show Login/Register only when NOT logged in -->
+            <li class="nav-item" v-if="!isUserLoggedIn">
               <router-link class="nav-link" to="/login">Login</router-link>
             </li>
-            <li class="nav-item" v-if="!loggedIn">
+            <li class="nav-item" v-if="!isUserLoggedIn">
               <router-link class="nav-link" to="/register">Register</router-link>
             </li>
-            <li class="nav-item" v-if="loggedIn && localStorage.getItem('role') === 'user'">
+            
+            <!-- Show Dashboard for regular users when logged in -->
+            <li class="nav-item" v-if="isUserLoggedIn && userRole === 'user'">
               <router-link class="nav-link" to="/dashboard">Dashboard</router-link>
             </li>
-            <li class="nav-item" v-if="loggedIn && localStorage.getItem('role') === 'admin'">
+            
+            <!-- Show Admin Panel for admins when logged in -->
+            <li class="nav-item" v-if="isUserLoggedIn && userRole === 'admin'">
               <router-link class="nav-link" to="/admin">Admin Panel</router-link>
             </li>
-            <li class="nav-item" v-if="loggedIn">
+            
+            <!-- Show Logout only when logged in -->
+            <li class="nav-item" v-if="isUserLoggedIn">
               <a class="nav-link" href="#" @click.prevent="logout">Logout</a>
             </li>
           </ul>

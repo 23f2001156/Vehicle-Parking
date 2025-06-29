@@ -1,6 +1,7 @@
 from .database import db
 from flask_security import UserMixin, RoleMixin
 from datetime import datetime
+import uuid
 
 # Many-to-many table between User and Role
 class UsersRoles(db.Model):
@@ -24,13 +25,18 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False)
-    active = db.Column(db.Boolean(), nullable=False)
+    active = db.Column(db.Boolean(), nullable=False, default=True)
 
     # Flask-Security fields
     roles = db.relationship('Role', secondary='users_roles', backref='users')
 
     # Custom relationship
     reservations = db.relationship('Reservation', backref='user', lazy=True)
+
+    def __init__(self, **kwargs):
+        super(User, self).__init__(**kwargs)
+        if not self.fs_uniquifier:
+            self.fs_uniquifier = str(uuid.uuid4())
 
 # Parking lot model
 class ParkingLot(db.Model):
@@ -42,7 +48,10 @@ class ParkingLot(db.Model):
     price_per_hour = db.Column(db.Float, nullable=False)
     number_of_spots = db.Column(db.Integer, nullable=False)
 
-    spots = db.relationship('ParkingSpot', backref='lot', lazy=True)
+    spots = db.relationship('ParkingSpot', backref='lot', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<ParkingLot {self.prime_location_name}>'
 
 # Parking spot model
 class ParkingSpot(db.Model):
@@ -53,16 +62,18 @@ class ParkingSpot(db.Model):
 
     reservations = db.relationship('Reservation', backref='spot', lazy=True)
 
-# Reservation model
+    def __repr__(self):
+        return f'<ParkingSpot {self.id} - {self.status}>'
+    
 class Reservation(db.Model):
     __tablename__ = 'reservation'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     spot_id = db.Column(db.Integer, db.ForeignKey('parking_spot.id'), nullable=False)
 
-    parking_timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    parking_timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     leaving_timestamp = db.Column(db.DateTime, nullable=True)
-    parking_cost = db.Column(db.Float)
+    parking_cost = db.Column(db.Float, default=0.0)
 
     def calculate_cost(self, price_per_hour):
         if self.leaving_timestamp:
@@ -70,3 +81,8 @@ class Reservation(db.Model):
             self.parking_cost = round(duration * price_per_hour, 2)
         else:
             self.parking_cost = 0.0
+        return self.parking_cost
+
+    def __repr__(self):
+        return f'<Reservation {self.id} - User {self.user_id} - Spot {self.spot_id}>'
+    

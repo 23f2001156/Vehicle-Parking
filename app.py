@@ -22,7 +22,8 @@ def create_app():
 
     # Setup Flask-Security datastore and Security extension
     datastore = SQLAlchemyUserDatastore(db, User, Role)
-    app.security = Security(app, datastore, register_blueprint=False)
+    # Remove register_blueprint=False to allow Flask-Security routes
+    app.security = Security(app, datastore)
 
     app.app_context().push()
     return app
