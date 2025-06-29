@@ -48,19 +48,19 @@ export default {
       <ul class="nav nav-tabs mb-4" role="tablist">
         <li class="nav-item">
           <a class="nav-link" :class="{ active: activeTab === 'lots' }" 
-             @click="activeTab = 'lots'" href="#" role="tab">Parking Lots</a>
+             @click="activeTab = 'lots'" href="#admin" role="tab">Parking Lots</a>
         </li>
         <li class="nav-item">
           <a class="nav-link" :class="{ active: activeTab === 'spots' }" 
-             @click="activeTab = 'spots'" href="#" role="tab">Parking Spots</a>
+             @click="activeTab = 'spots'" href="#admin" role="tab">Parking Spots</a>
         </li>
         <li class="nav-item">
           <a class="nav-link" :class="{ active: activeTab === 'users' }" 
-             @click="activeTab = 'users'" href="#" role="tab">Users</a>
+             @click="activeTab = 'users'" href="#admin" role="tab">Users</a>
         </li>
         <li class="nav-item">
           <a class="nav-link" :class="{ active: activeTab === 'charts' }" 
-             @click="activeTab = 'charts'" href="#" role="tab">Reports</a>
+             @click="activeTab = 'charts'" href="#admin" role="tab">Reports</a>
         </li>
       </ul>
 
@@ -375,7 +375,7 @@ export default {
     
     async saveLot() {
       try {
-        // Validate form data
+       
         if (!this.lotForm.prime_location_name || !this.lotForm.price_per_hour || !this.lotForm.number_of_spots) {
           this.showError('Please fill in all required fields')
           return

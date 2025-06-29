@@ -289,13 +289,13 @@ def get_parking_spots(lot_id):
 @auth_required('token')  # Added 'token' parameter
 @roles_required('admin')
 def get_users():
-    """Get all registered users with their reservation counts"""
+   
     try:
-        # Fixed the query to use proper SQLAlchemy syntax
+        
         users_with_counts = db.session.query(
             User,
             func.count(Reservation.id).label('reservation_count')
-        ).outerjoin(Reservation).group_by(User.id).all()
+        ).outerjoin(Reservation).group_by(User.id).filter(Role.name == 'user').all()
         
         result = []
         for user, reservation_count in users_with_counts:
