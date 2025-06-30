@@ -62,7 +62,7 @@ def login():
     return jsonify({
         "message": "Login successful",
         "token": token,
-        "roles": [role.name for role in user.roles],  # Add this line
+        "roles": [role.name for role in user.roles],
         "user": {
             "id": user.id,
             "email": user.email,
@@ -84,12 +84,10 @@ def profile():
     }), 200
 
 
-print(app.url_map)
-
 #################### ADMIN ROUTES ###################
 
 @app.route('/api/admin/summary', methods=['GET'])
-@auth_required('token')  # Added 'token' parameter
+@auth_required('token')
 @roles_required('admin')
 def get_summary():
     """Get dashboard summary statistics"""
@@ -100,7 +98,7 @@ def get_summary():
         available_spots = ParkingSpot.query.filter_by(status='A').count()
         occupied_spots = ParkingSpot.query.filter_by(status='O').count()
         
-        # Get user count (excluding admins) - Fixed the query
+        # Get user count (excluding admins)
         total_users = db.session.query(User).join(User.roles).filter(Role.name == 'user').count()
         
         return jsonify({
@@ -110,20 +108,19 @@ def get_summary():
             'totalUsers': total_users
         })
     except Exception as e:
-        print(f"Error in get_summary: {str(e)}")  # Added logging
+        print(f"Error in get_summary: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/parking-lots', methods=['GET'])
-@auth_required('token')  # Added 'token' parameter
+@auth_required('token')
 @roles_required('admin')
 def get_parking_lots():
     """Get all parking lots with availability info"""
     try:
-        # Fixed the query - using db.session.query properly
-        lots_query = db.session.query(ParkingLot).outerjoin(ParkingSpot).all()
+        lots = ParkingLot.query.all()
         
         result = []
-        for lot in lots_query:
+        for lot in lots:
             # Calculate available spots for each lot
             available_spots = ParkingSpot.query.filter_by(lot_id=lot.id, status='A').count()
             
@@ -132,35 +129,52 @@ def get_parking_lots():
                 'prime_location_name': lot.prime_location_name,
                 'address': lot.address,
                 'pin_code': lot.pin_code,
-                'price_per_hour': lot.price_per_hour,
+                'price_per_hour': float(lot.price_per_hour),
                 'number_of_spots': lot.number_of_spots,
                 'available_spots': available_spots
             })
         
         return jsonify(result)
     except Exception as e:
-        print(f"Error in get_parking_lots: {str(e)}")  # Added logging
+        print(f"Error in get_parking_lots: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/parking-lots', methods=['POST'])
-@auth_required('token')  # Added 'token' parameter
+@auth_required('token')
 @roles_required('admin')
 def create_parking_lot():
     """Create a new parking lot with specified number of spots"""
     try:
         data = request.get_json()
+        print(f"Received data: {data}")  # Debug print
         
         # Validate required fields
-        if not data or not data.get('prime_location_name') or not data.get('price_per_hour') or not data.get('number_of_spots'):
-            return jsonify({'error': 'Missing required fields'}), 400
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        required_fields = ['prime_location_name', 'price_per_hour', 'number_of_spots']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+        
+        # Validate data types
+        try:
+            price_per_hour = float(data['price_per_hour'])
+            number_of_spots = int(data['number_of_spots'])
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid data types for price_per_hour or number_of_spots'}), 400
+        
+        if price_per_hour <= 0 or number_of_spots <= 0:
+            return jsonify({'error': 'Price and number of spots must be positive numbers'}), 400
         
         # Create parking lot
         lot = ParkingLot(
             prime_location_name=data['prime_location_name'],
             address=data.get('address', ''),
             pin_code=data.get('pin_code', ''),
-            price_per_hour=float(data['price_per_hour']),
-            number_of_spots=int(data['number_of_spots'])
+            price_per_hour=price_per_hour,
+            number_of_spots=number_of_spots
         )
         
         db.session.add(lot)
@@ -172,15 +186,17 @@ def create_parking_lot():
             db.session.add(spot)
         
         db.session.commit()
+        print(f"Successfully created lot with ID: {lot.id}")  # Debug print
         
         return jsonify({'message': 'Parking lot created successfully', 'id': lot.id}), 201
+        
     except Exception as e:
         db.session.rollback()
-        print(f"Error in create_parking_lot: {str(e)}")  # Added logging
-        return jsonify({'error': str(e)}), 400
+        print(f"Error in create_parking_lot: {str(e)}")
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 @app.route('/api/admin/parking-lots/<int:lot_id>', methods=['PUT'])
-@auth_required('token')  # Added 'token' parameter
+@auth_required('token')
 @roles_required('admin')
 def update_parking_lot(lot_id):
     """Update parking lot details"""
@@ -188,20 +204,29 @@ def update_parking_lot(lot_id):
         lot = ParkingLot.query.get_or_404(lot_id)
         data = request.get_json()
         
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate data types
+        try:
+            price_per_hour = float(data['price_per_hour'])
+            number_of_spots = int(data['number_of_spots'])
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid data types'}), 400
+        
         # Update basic info
         lot.prime_location_name = data['prime_location_name']
         lot.address = data.get('address', '')
         lot.pin_code = data.get('pin_code', '')
-        lot.price_per_hour = float(data['price_per_hour'])
+        lot.price_per_hour = price_per_hour
         
         # Handle spot count changes
-        new_spot_count = int(data['number_of_spots'])
         current_spot_count = ParkingSpot.query.filter_by(lot_id=lot_id).count()
         
-        if new_spot_count != current_spot_count:
-            if new_spot_count < current_spot_count:
+        if number_of_spots != current_spot_count:
+            if number_of_spots < current_spot_count:
                 # Remove excess spots (only if they're available)
-                spots_to_remove = current_spot_count - new_spot_count
+                spots_to_remove = current_spot_count - number_of_spots
                 excess_spots = ParkingSpot.query.filter_by(lot_id=lot_id, status='A').limit(spots_to_remove).all()
                 
                 if len(excess_spots) < spots_to_remove:
@@ -211,22 +236,22 @@ def update_parking_lot(lot_id):
                     db.session.delete(spot)
             else:
                 # Add new spots
-                spots_to_add = new_spot_count - current_spot_count
+                spots_to_add = number_of_spots - current_spot_count
                 for i in range(spots_to_add):
                     spot = ParkingSpot(lot_id=lot_id, status='A')
                     db.session.add(spot)
         
-        lot.number_of_spots = new_spot_count
+        lot.number_of_spots = number_of_spots
         db.session.commit()
         
         return jsonify({'message': 'Parking lot updated successfully'})
     except Exception as e:
         db.session.rollback()
-        print(f"Error in update_parking_lot: {str(e)}")  # Added logging
-        return jsonify({'error': str(e)}), 400
+        print(f"Error in update_parking_lot: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/parking-lots/<int:lot_id>', methods=['DELETE'])
-@auth_required('token')  # Added 'token' parameter
+@auth_required('token')
 @roles_required('admin')
 def delete_parking_lot(lot_id):
     """Delete parking lot if all spots are empty"""
@@ -246,11 +271,11 @@ def delete_parking_lot(lot_id):
         return jsonify({'message': 'Parking lot deleted successfully'})
     except Exception as e:
         db.session.rollback()
-        print(f"Error in delete_parking_lot: {str(e)}")  # Added logging
-        return jsonify({'error': str(e)}), 400
+        print(f"Error in delete_parking_lot: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/parking-lots/<int:lot_id>/spots', methods=['GET'])
-@auth_required('token')  # Added 'token' parameter
+@auth_required('token')
 @roles_required('admin')
 def get_parking_spots(lot_id):
     """Get all spots for a specific parking lot with current reservation info"""
@@ -265,7 +290,7 @@ def get_parking_spots(lot_id):
                 'current_reservation': None
             }
             
-            # If occupied, get current reservation details
+            #
             if spot.status == 'O':
                 current_reservation = Reservation.query.filter_by(
                     spot_id=spot.id,
@@ -282,20 +307,20 @@ def get_parking_spots(lot_id):
         
         return jsonify(result)
     except Exception as e:
-        print(f"Error in get_parking_spots: {str(e)}")  # Added logging
+        print(f"Error in get_parking_spots: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/users', methods=['GET'])
-@auth_required('token')  # Added 'token' parameter
+@auth_required('token')
 @roles_required('admin')
 def get_users():
-   
+    
     try:
-        
+       
         users_with_counts = db.session.query(
             User,
             func.count(Reservation.id).label('reservation_count')
-        ).outerjoin(Reservation).group_by(User.id).filter(Role.name == 'user').all()
+        ).outerjoin(Reservation).join(User.roles).filter(Role.name == 'user').group_by(User.id).all()
         
         result = []
         for user, reservation_count in users_with_counts:
