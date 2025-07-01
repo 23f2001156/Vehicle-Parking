@@ -10,14 +10,14 @@ class UsersRoles(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     role_id = db.Column(db.Integer, db.ForeignKey('role.id'))
 
-# Role model
+
 class Role(db.Model, RoleMixin):
     __tablename__ = 'role'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.String(255))
 
-# User model
+
 class User(db.Model, UserMixin):
     __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
@@ -27,10 +27,10 @@ class User(db.Model, UserMixin):
     fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False)
     active = db.Column(db.Boolean(), nullable=False, default=True)
 
-    # Flask-Security fields
+    
     roles = db.relationship('Role', secondary='users_roles', backref='users')
 
-    # Custom relationship
+    
     reservations = db.relationship('Reservation', backref='user', lazy=True)
 
     def __init__(self, **kwargs):
@@ -38,7 +38,6 @@ class User(db.Model, UserMixin):
         if not self.fs_uniquifier:
             self.fs_uniquifier = str(uuid.uuid4())
 
-# Parking lot model
 class ParkingLot(db.Model):
     __tablename__ = 'parking_lot'
     id = db.Column(db.Integer, primary_key=True)
@@ -53,7 +52,7 @@ class ParkingLot(db.Model):
     def __repr__(self):
         return f'<ParkingLot {self.prime_location_name}>'
 
-# Parking spot model
+
 class ParkingSpot(db.Model):
     __tablename__ = 'parking_spot'
     id = db.Column(db.Integer, primary_key=True)
@@ -65,12 +64,26 @@ class ParkingSpot(db.Model):
     def __repr__(self):
         return f'<ParkingSpot {self.id} - {self.status}>'
     
+class Vehicle(db.Model):
+    __tablename__ = 'vehicle'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    vehicle_number = db.Column(db.String(20), unique=True, nullable=False)
+    model = db.Column(db.String(50))
+    color = db.Column(db.String(30))
+
+    user = db.relationship('User', backref='vehicles')
+    reservations = db.relationship('Reservation', backref='vehicle', lazy=True)
+
+    def __repr__(self):
+        return f'<Vehicle {self.vehicle_number}>'
+
 class Reservation(db.Model):
     __tablename__ = 'reservation'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     spot_id = db.Column(db.Integer, db.ForeignKey('parking_spot.id'), nullable=False)
-
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=True)
     parking_timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     leaving_timestamp = db.Column(db.DateTime, nullable=True)
     parking_cost = db.Column(db.Float, default=0.0)

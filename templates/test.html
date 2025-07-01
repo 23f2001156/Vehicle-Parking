@@ -1,0 +1,146 @@
+<div class="container mt-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>User Dashboard</h2>
+        <button class="btn btn-outline-secondary btn-sm" @click="editProfile">Edit Profile</button>
+      </div>
+      <ul class="nav nav-tabs mb-3">
+        <li class="nav-item" v-for="tab in tabs" :key="tab.key">
+          <a class="nav-link" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key">{{ tab.name }}</a>
+        </li>
+      </ul>
+      <div v-if="activeTab === 'history'">
+        <h5>Recent Parking History</h5>
+        <div v-if="loading.history" class="text-muted">Loading...</div>
+        <div v-else>
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>ID</th><th>Location</th><th>Vehicle</th><th>In</th><th>Out</th><th>Action</th><th>Cost</th></tr></thead>
+            <tbody>
+              <tr v-for="h in history" :key="h.id">
+                <td>{{ h.id }}</td>
+                <td>{{ h.location }}</td>
+                <td>{{ h.vehicle_no }}</td>
+                <td>{{ h.in }}</td>
+                <td>{{ h.out || '-' }}</td>
+                
+                <td>
+                  <button v-if="!h.out" class="btn btn-sm btn-warning" @click="openRelease(h)">Release</button>
+                  <span v-else class="badge bg-success">Parked Out</span>
+                </td>
+                <td>{{ h.cost+'$' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="error.history" class="text-danger small">{{ error.history }}</div>
+        </div>
+      </div>
+      <div v-if="activeTab === 'book'">
+        <h5>Parking Lots</h5>
+        <input class="form-control mb-2" v-model="search" placeholder="Search location/pin...">
+        <div v-if="vehicles.length === 0 && !showVehicleModal" class="alert alert-warning p-2">
+          No vehicles registered. <button class="btn btn-sm btn-primary ms-2" @click="showVehicleModal=true">Register Vehicle</button>
+        </div>
+        <div v-if="loading.lots" class="text-muted">Loading...</div>
+        <div v-else>
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>ID</th><th>Address</th><th>Available</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr v-for="lot in filteredLots" :key="lot.id">
+                <td>{{ lot.id }}</td>
+                <td>{{ lot.address }}</td>
+                <td>{{ lot.available }}</td>
+                <td><button class="btn btn-sm btn-primary" :disabled="lot.available===0 || vehicles.length===0" @click="openBook(lot)">Book</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="error.lots" class="text-danger small">{{ error.lots }}</div>
+          <button class="btn btn-outline-success btn-sm mt-2" @click="showVehicleModal=true">Register New Vehicle</button>
+        </div>
+      </div>
+      <div v-if="activeTab === 'vehicles'">
+        <h5>My Vehicles</h5>
+        <button class="btn btn-success btn-sm mb-2" @click="showVehicleModal=true">Register New Vehicle</button>
+        <div v-if="loading.vehicles" class="text-muted">Loading...</div>
+        <div v-else>
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>#</th><th>Vehicle Number</th><th>Model</th><th>Color</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr v-for="(v, idx) in vehicles" :key="v.id">
+                <td>{{ idx+1 }}</td>
+                <td>{{ v.vehicle_number }}</td>
+                <td>{{ v.model }}</td>
+                <td>{{ v.color }}</td>
+                <td><button class="btn btn-danger btn-sm" @click="deleteVehicle(v.id)">Delete</button></td>
+              </tr>
+              <tr v-if="vehicles.length === 0"><td colspan="5" class="text-center text-muted">No vehicles registered.</td></tr>
+            </tbody>
+          </table>
+          <div v-if="error.vehicleList" class="text-danger small">{{ error.vehicleList }}</div>
+        </div>
+      </div>
+      <div v-if="activeTab === 'summary'">
+        <h5>Parking Summary</h5>
+        <canvas id="userSummaryChart" height="200"></canvas>
+      </div>
+     
+      <div v-if="showBook" class="modal d-block" style="background:rgba(0,0,0,0.3)">
+        <div class="modal-dialog"><div class="modal-content">
+          <div class="modal-header"><h5>Book Parking Spot</h5><button class="btn-close" @click="showBook=false"></button></div>
+          <div class="modal-body">
+            <div class="mb-2">Lot: <b>{{ bookForm.lot_name }}</b></div>
+            <div class="mb-2">Select Vehicle:
+              <select class="form-select" v-model="bookForm.vehicle_id">
+                <option v-for="v in vehicles" :key="v.id" :value="v.id">{{ v.vehicle_number }} ({{ v.model }})</option>
+              </select>
+            </div>
+            <div v-if="error.book" class="text-danger small">{{ error.book }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-primary" @click="reserveSpot" :disabled="!bookForm.vehicle_id">Reserve</button>
+            <button class="btn btn-secondary" @click="showBook=false">Cancel</button>
+          </div>
+        </div></div>
+      </div>
+      <div v-if="showRelease" class="modal d-block" style="background:rgba(0,0,0,0.3)">
+        <div class="modal-dialog"><div class="modal-content">
+          <div class="modal-header"><h5>Release Parking Spot</h5><button class="btn-close" @click="showRelease=false"></button></div>
+          <div class="modal-body">
+            <div class="mb-2">Spot ID: <b>{{ releaseForm.spot_id }}</b></div>
+            <div class="mb-2">Vehicle No: <b>{{ releaseForm.vehicle_no }}</b></div>
+            <div class="mb-2">Parking Time: <b>{{ releaseForm.in }}</b></div>
+            <div class="mb-2">Releasing Time: <b>{{ releaseForm.out }}</b></div>
+            <div class="mb-2">Total Cost: <b>{{ releaseForm.cost }}</b></div>
+            <div v-if="error.release" class="text-danger small">{{ error.release }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-warning" @click="releaseSpot" :disabled="releaseForm.loading">Release</button>
+            <button class="btn btn-secondary" @click="showRelease=false">Cancel</button>
+          </div>
+        </div></div>
+      </div>
+      <div v-if="showVehicleModal" class="modal d-block" style="background:rgba(0,0,0,0.3)">
+        <div class="modal-dialog"><div class="modal-content">
+          <div class="modal-header"><h5>Register Vehicle</h5><button class="btn-close" @click="closeVehicleModal"></button></div>
+          <form @submit.prevent="registerVehicle">
+            <div class="modal-body">
+              <div class="mb-2">
+                <label>Vehicle Number <span class="text-danger">*</span></label>
+                <input class="form-control" v-model="vehicleForm.vehicle_number" required maxlength="20">
+              </div>
+              <div class="mb-2">
+                <label>Model</label>
+                <input class="form-control" v-model="vehicleForm.model" maxlength="50">
+              </div>
+              <div class="mb-2">
+                <label>Color</label>
+                <input class="form-control" v-model="vehicleForm.color" maxlength="30">
+              </div>
+              <div v-if="error.vehicle" class="text-danger small">{{ error.vehicle }}</div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-success" type="submit" :disabled="vehicleForm.loading">Register</button>
+              <button class="btn btn-secondary" @click="closeVehicleModal" type="button">Cancel</button>
+            </div>
+          </form>
+        </div></div>
+      </div>
+    </div>

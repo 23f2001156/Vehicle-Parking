@@ -1,11 +1,12 @@
 from flask import request, jsonify,render_template
 from flask_security import auth_required, roles_accepted, current_user,roles_required
 from flask_security.utils import verify_password, hash_password
-from application.models import User, Role, ParkingLot, ParkingSpot, Reservation
+from application.models import User, Role, ParkingLot, ParkingSpot, Reservation, Vehicle
 from application.database import db
 from sqlalchemy import func
 from .utils import roles_list
 from app import app 
+from datetime import datetime
 
 @app.route('/', methods = ['GET'])
 def home():
@@ -337,3 +338,123 @@ def get_users():
     except Exception as e:
         print(f"Error in get_users: {str(e)}") 
         return jsonify({'error': str(e)}), 500
+    
+    
+
+
+#### USER ROUTES ####
+
+@app.route('/api/user/history', methods=['GET'])
+@auth_required('token')
+@roles_required('user')
+def user_history():
+    reservations = Reservation.query.filter_by(user_id=current_user.id).order_by(Reservation.parking_timestamp.desc()).all()
+    result = []
+    for r in reservations:
+        lot = r.spot.lot
+        vehicle = r.vehicle
+        result.append({
+            'id': r.id,
+            'location': lot.prime_location_name,
+            'address': lot.address,
+            'vehicle_no': vehicle.vehicle_number if vehicle else '',
+            'in': r.parking_timestamp.strftime('%Y-%m-%d %H:%M'),
+            'out': r.leaving_timestamp.strftime('%Y-%m-%d %H:%M') if r.leaving_timestamp else None,
+            'spot_id': r.spot_id,
+            'cost': r.parking_cost
+        })
+    return jsonify(result)
+
+@app.route('/api/user/lots', methods=['GET'])
+@auth_required('token')
+@roles_required('user')
+def user_lots():
+    lots = ParkingLot.query.all()
+    result = []
+    for lot in lots:
+        available = ParkingSpot.query.filter_by(lot_id=lot.id, status='A').count()
+        result.append({
+            'id': lot.id,
+            'address': lot.address,
+            'prime_location_name': lot.prime_location_name,
+            'available': available
+        })
+    return jsonify(result)
+
+@app.route('/api/user/book', methods=['POST'])
+@auth_required('token')
+@roles_required('user')
+def user_book():
+    data = request.get_json()
+    lot_id = data.get('lot_id')
+    vehicle_id = data.get('vehicle_id')
+    spot = ParkingSpot.query.filter_by(lot_id=lot_id, status='A').first()
+    if not spot:
+        return jsonify({'error': 'No available spots'}), 400
+    active_res=Reservation.query.filter_by(vehicle_id=vehicle_id, leaving_timestamp=None).first()
+    if active_res:
+        return jsonify({'error' : 'Vehicle already has an active reservation'}), 400
+    reservation = Reservation(user_id=current_user.id, spot_id=spot.id, vehicle_id=vehicle_id)
+    spot.status = 'O'
+    db.session.add(reservation)
+    db.session.commit()
+    return jsonify({'message': 'Spot booked', 'spot_id': spot.id, 'reservation_id': reservation.id})
+
+@app.route('/api/user/release', methods=['POST'])
+@auth_required('token')
+@roles_required('user')
+def user_release():
+    data = request.get_json()
+    reservation_id = data.get('reservation_id')
+    reservation = Reservation.query.filter_by(id=reservation_id, user_id=current_user.id, leaving_timestamp=None).first()
+    if not reservation:
+        return jsonify({'error': 'Reservation not found or already released'}), 404
+    reservation.leaving_timestamp = datetime.utcnow()
+    reservation.spot.status = 'A'
+    reservation.calculate_cost(reservation.spot.lot.price_per_hour)
+    db.session.commit()
+    return jsonify({'message': 'Spot released', 'cost': reservation.parking_cost})
+
+@app.route('/api/user/vehicles', methods=['GET'])
+@auth_required('token')
+@roles_required('user')
+def user_vehicles():
+    vehicles = Vehicle.query.filter_by(user_id=current_user.id).all()
+    return jsonify([{'id': v.id, 'vehicle_number': v.vehicle_number, 'model': v.model, 'color': v.color} for v in vehicles])
+
+@app.route('/api/user/vehicles', methods=['POST'])
+@auth_required('token')
+@roles_required('user')
+def add_vehicle():
+    data = request.get_json()
+    vehicle_number = data.get('vehicle_number')
+    model = data.get('model')
+    color = data.get('color')
+    if not vehicle_number:
+        return jsonify({'error': 'Vehicle number required'}), 400
+    if Vehicle.query.filter_by(vehicle_number=vehicle_number).first():
+        return jsonify({'error': 'Vehicle already exists'}), 409
+    vehicle = Vehicle(
+        user_id=current_user.id,
+        vehicle_number=vehicle_number,
+        model=model,
+        color=color
+    )
+    db.session.add(vehicle)
+    db.session.commit()
+    return jsonify({'message': 'Vehicle added', 'id': vehicle.id})
+
+@app.route('/api/user/vehicles/<int:vehicle_id>', methods=['DELETE'])
+@auth_required('token')
+@roles_required('user')
+def delete_vehicle(vehicle_id):
+    vehicle = Vehicle.query.filter_by(id=vehicle_id, user_id=current_user.id).first()
+    if not vehicle:
+        return jsonify({'error': 'Vehicle not found'}), 404
+   
+    active_res = Reservation.query.filter_by(vehicle_id=vehicle_id, leaving_timestamp=None).first()
+    if active_res:
+        return jsonify({'error': 'Cannot delete vehicle with active reservation'}), 400
+    db.session.delete(vehicle)
+    db.session.commit()
+    return jsonify({'message': 'Vehicle deleted'})
