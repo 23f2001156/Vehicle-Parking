@@ -52,11 +52,15 @@ def login():
 
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
+    
+    
 
     user = User.query.filter_by(email=email).first()
 
     if not user or not verify_password(password, user.password):
         return jsonify({"error": "Invalid credentials"}), 401
+    if not user.active:
+        return jsonify({"error": "Your account is blocked,plz contact admin"})
 
     token = user.get_auth_token()
 
@@ -124,7 +128,10 @@ def get_parking_lots():
         for lot in lots:
             # Calculate available spots for each lot
             available_spots = ParkingSpot.query.filter_by(lot_id=lot.id, status='A').count()
-            
+            revenue = db.session.query(func.sum(Reservation.parking_cost)) \
+                .join(ParkingSpot, Reservation.spot_id == ParkingSpot.id) \
+                .filter(ParkingSpot.lot_id == lot.id) \
+                .scalar() or 0
             result.append({
                 'id': lot.id,
                 'prime_location_name': lot.prime_location_name,
@@ -132,7 +139,9 @@ def get_parking_lots():
                 'pin_code': lot.pin_code,
                 'price_per_hour': float(lot.price_per_hour),
                 'number_of_spots': lot.number_of_spots,
-                'available_spots': available_spots
+                'available_spots': available_spots,
+                'revenue': float(revenue),
+                
             })
         
         return jsonify(result)
@@ -144,12 +153,12 @@ def get_parking_lots():
 @auth_required('token')
 @roles_required('admin')
 def create_parking_lot():
-    """Create a new parking lot with specified number of spots"""
+    
     try:
         data = request.get_json()
-        print(f"Received data: {data}")  # Debug print
+        print(f"Received data: {data}")  
         
-        # Validate required fields
+       
         if not data:
             return jsonify({'error': 'No data provided'}), 400
             
@@ -159,7 +168,7 @@ def create_parking_lot():
         if missing_fields:
             return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
         
-        # Validate data types
+        
         try:
             price_per_hour = float(data['price_per_hour'])
             number_of_spots = int(data['number_of_spots'])
@@ -169,7 +178,7 @@ def create_parking_lot():
         if price_per_hour <= 0 or number_of_spots <= 0:
             return jsonify({'error': 'Price and number of spots must be positive numbers'}), 400
         
-        # Create parking lot
+       
         lot = ParkingLot(
             prime_location_name=data['prime_location_name'],
             address=data.get('address', ''),
@@ -179,15 +188,14 @@ def create_parking_lot():
         )
         
         db.session.add(lot)
-        db.session.flush()  # Get the lot ID
+        db.session.flush()  
         
-        # Create parking spots for this lot
         for i in range(lot.number_of_spots):
             spot = ParkingSpot(lot_id=lot.id, status='A')
             db.session.add(spot)
         
         db.session.commit()
-        print(f"Successfully created lot with ID: {lot.id}")  # Debug print
+        
         
         return jsonify({'message': 'Parking lot created successfully', 'id': lot.id}), 201
         
@@ -259,12 +267,12 @@ def delete_parking_lot(lot_id):
     try:
         lot = ParkingLot.query.get_or_404(lot_id)
         
-        # Check if any spots are occupied
+        
         occupied_spots = ParkingSpot.query.filter_by(lot_id=lot_id, status='O').count()
         if occupied_spots > 0:
             return jsonify({'error': 'Cannot delete parking lot with occupied spots'}), 400
         
-        # Delete all spots and the lot
+       
         ParkingSpot.query.filter_by(lot_id=lot_id).delete()
         db.session.delete(lot)
         db.session.commit()
@@ -291,7 +299,7 @@ def get_parking_spots(lot_id):
                 'current_reservation': None
             }
             
-            #
+            
             if spot.status == 'O':
                 current_reservation = Reservation.query.filter_by(
                     spot_id=spot.id,
@@ -299,10 +307,15 @@ def get_parking_spots(lot_id):
                 ).join(User).first()
                 
                 if current_reservation:
+                    vehicle=current_reservation.vehicle
                     spot_data['current_reservation'] = {
                         'user_email': current_reservation.user.email,
-                        'parking_timestamp': current_reservation.parking_timestamp.isoformat()
+                        'parking_timestamp': current_reservation.parking_timestamp.isoformat(),
+                        'vehicle_no': vehicle.vehicle_number if vehicle else None,
+                        'vehicle_model': vehicle.model if vehicle else None,
+                        'vehicle_color': vehicle.color if vehicle else None
                     }
+                    
             
             result.append(spot_data)
         
@@ -338,8 +351,42 @@ def get_users():
     except Exception as e:
         print(f"Error in get_users: {str(e)}") 
         return jsonify({'error': str(e)}), 500
-    
-    
+
+@app.route('/api/admin/users/<int:user_id>/block', methods=['POST'])
+@auth_required('token')
+@roles_required('admin')
+def block_user(user_id):
+    user = User.query.get_or_404(user_id)
+    user.active=False
+    db.session.commit()
+    return jsonify({'message': 'User blocked successfully'})
+@app.route('/api/admin/users/<int:user_id>/unblock', methods=['POST'])
+@auth_required('token')
+@roles_required('admin')
+def unblock_user(user_id):
+    user=User.query.get_or_404(user_id)
+    user.active=True
+    db.session.commit()
+    return jsonify({'message': 'User unblocked successfully'})
+
+@app.route('/api/admin/vehicles', methods=['GET'])
+@auth_required('token')
+@roles_required('admin')
+def get_vehicles():
+    vehicles=Vehicle.query.all()
+    result = []
+    for vehicle in vehicles:
+        result.append({
+            'id': vehicle.id,
+            'vehicle_number': vehicle.vehicle_number,
+            'model': vehicle.model,
+            'color': vehicle.color,
+            'user_id': vehicle.user.username
+        })
+    return jsonify(result)
+
+
+
 
 
 #### USER ROUTES ####
@@ -358,8 +405,8 @@ def user_history():
             'location': lot.prime_location_name,
             'address': lot.address,
             'vehicle_no': vehicle.vehicle_number if vehicle else '',
-            'in': r.parking_timestamp.strftime('%Y-%m-%d %H:%M'),
-            'out': r.leaving_timestamp.strftime('%Y-%m-%d %H:%M') if r.leaving_timestamp else None,
+            'in': r.parking_timestamp.isoformat() + 'Z' if r.parking_timestamp else None,
+            'out': r.leaving_timestamp.isoformat() + 'Z' if r.leaving_timestamp else None,
             'spot_id': r.spot_id,
             'cost': r.parking_cost
         })

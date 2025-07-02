@@ -59,7 +59,7 @@ class ParkingSpot(db.Model):
     lot_id = db.Column(db.Integer, db.ForeignKey('parking_lot.id'), nullable=False)
     status = db.Column(db.String(1), default='A')  
 
-    reservations = db.relationship('Reservation', backref='spot', lazy=True)
+    reservations = db.relationship('Reservation', backref='spot', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<ParkingSpot {self.id} - {self.status}>'

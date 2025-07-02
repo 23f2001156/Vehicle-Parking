@@ -26,19 +26,19 @@ export default {
         const data = await response.json()
 
         if (!response.ok) {
-            this.error = data.error || data.message || 'Login failed'  // Check both
+            this.error = data.error || data.message || 'Login failed' 
             this.loading = false
             return
 }
 
-        // Store token and role properly
+        
         localStorage.setItem('token', data.token)
         localStorage.setItem('role', data.user.roles[0])
         localStorage.setItem('user', JSON.stringify(data.user))
 
         this.$emit('login')
 
-        // Redirect based on role
+        
         if (data.user.roles[0] === 'admin') {
           this.$router.push('/admin')
         } else {

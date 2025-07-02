@@ -69,7 +69,10 @@ export default {
                 </span>
                 <div v-if="spot.status === 'O' && spot.current_reservation" class="mt-2 small">
                   <strong>User:</strong> {{ spot.current_reservation.user_email }}<br>
-                  <strong>Since:</strong> {{ new Date(spot.current_reservation.parking_timestamp).toLocaleString() }}
+                  <strong>Since:</strong> {{ new Date(spot.current_reservation.parking_timestamp).toLocaleString() }} <br>
+                  <strong>Vehicle:</strong> {{ spot.current_reservation.vehicle_no || 'N/A' }} {{ spot.current_reservation.vehicle_model || 'N/A' }} {{ spot.current_reservation.vehicle_color || 'N/A' }}
+                  <br>
+                
                 </div>
               </div>
             </div>
@@ -81,7 +84,7 @@ export default {
         <h4>Registered Users</h4>
         <table class="table table-striped">
           <thead>
-            <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Reservations</th></tr>
+            <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Reservations</th><th>Actions</th></tr>
           </thead>
           <tbody>
             <tr v-for="user in users" :key="user.id">
@@ -97,7 +100,29 @@ export default {
                 </span>
               </td>
               <td>{{ user.reservation_count || 0 }}</td>
+              <td>
+                <button v-if="user.active" class="btn btn-sm btn-outline-danger me-1" @click="blockUser(user.id)">Block</button>
+                <button v-else class="btn btn-sm btn-outline-success me-1" @click="unblockUser(user.id)">Unblock</button>
+                </td>
             </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div v-if="activeTab === 'vehicles'">
+        <h4>Registered Vehicles</h4>  
+        <table class="table table-striped">
+          <thead>
+            <tr><th>ID</th><th>Owner</th><th>Vehicle Number</th><th>Model</th><th>Color</th></tr>
+          </thead>
+          <tbody>
+          <tr v-for="vehicle in vehicles" :key="vehicle.id">
+            <td>{{ vehicle.id }}</td>
+            <td>{{ vehicle.user_id }}</td> 
+            <td>{{ vehicle.vehicle_number }}</td>
+            <td>{{ vehicle.model }}</td>
+            <td>{{ vehicle.color }}</td>
+          </tr>
           </tbody>
         </table>
       </div>
@@ -166,6 +191,7 @@ export default {
       parkingLots: [],
       parkingSpots: [],
       users: [],
+      vehicles: [],
       selectedLotId: '',
       showLotModal: false,
       editingLot: false,
@@ -187,6 +213,7 @@ export default {
         { key: 'lots', name: 'Parking Lots' },
         { key: 'spots', name: 'Parking Spots' },
         { key: 'users', name: 'Users' },
+        { key: 'vehicles', name: 'Vehicles' },
         { key: 'charts', name: 'Reports' }
       ]
     }
@@ -199,7 +226,7 @@ export default {
   methods: {
     async loadData() {
       try {
-        await Promise.all([this.loadSummary(), this.loadLots(), this.loadUsers()])
+        await Promise.all([this.loadSummary(), this.loadLots(), this.loadUsers(), this.loadVehicles()])
       } catch (error) {
         alert('Error loading data: ' + error.message)
       }
@@ -235,12 +262,25 @@ export default {
     async loadSpots() {
       if (!this.selectedLotId) return
       this.parkingSpots = await this.apiCall(`/api/admin/parking-lots/${this.selectedLotId}/spots`)
+  
     },
     
     async loadUsers() {
       this.users = await this.apiCall('/api/admin/users')
     },
-    
+    async loadVehicles() {
+      this.vehicles = await this.apiCall('/api/admin/vehicles', { method: 'GET' })
+
+    },
+    async blockUser(userId) {
+      await this.apiCall(`/api/admin/users/${userId}/block`, { method: 'POST' })
+      await this.loadUsers() 
+    },
+    async unblockUser(userId) {
+      await this.apiCall(`/api/admin/users/${userId}/unblock`, { method: 'POST' })
+      await this.loadUsers() 
+    },
+
     openLotModal(lot = null) {
       this.editingLot = !!lot
       this.lotForm = lot ? { ...lot } : { id: null, prime_location_name: '', address: '', pin_code: '', price_per_hour: 0, number_of_spots: 0 }
@@ -307,6 +347,67 @@ export default {
     closeLotModal() {
       this.showLotModal = false
       this.editingLot = false 
+    },
+     showCharts() {
+      
+      if (this.occupancyChart) this.occupancyChart.destroy();
+      const occCanvas = document.getElementById('occupancyChart');
+      if (occCanvas) {
+        const occCtx = occCanvas.getContext('2d');
+        this.occupancyChart = new Chart(occCtx, {
+          type: 'bar',
+          data: {
+            labels: this.parkingLots.map(lot => lot.prime_location_name),
+            datasets: [
+              {
+                label: 'Occupied',
+                data: this.parkingLots.map(lot => lot.number_of_spots - lot.available_spots),
+                backgroundColor: 'rgba(255, 99, 132, 0.5)'
+              },
+              {
+                label: 'Available',
+                data: this.parkingLots.map(lot => lot.available_spots),
+                backgroundColor: 'rgba(75, 192, 192, 0.5)'
+              }
+            ]
+          }
+        });
+      }
+      
+      if (this.revenueChart) this.revenueChart.destroy();
+      const revCanvas = document.getElementById('revenueChart');
+      if (revCanvas) {
+        const revCtx = revCanvas.getContext('2d');
+        this.revenueChart = new Chart(revCtx, {
+          type: 'bar',
+          data: {
+            labels: this.parkingLots.map(lot => lot.prime_location_name),
+            datasets: [
+              {
+                label: 'Revenue ($)',
+                data: this.parkingLots.map(lot => lot.revenue || 0),
+                backgroundColor: 'rgba(54, 162, 235, 0.5)'
+              }
+            ]
+          }
+        });
+      }
+    }
+  },
+  watch: {
+    activeTab(newTab) {
+      if (newTab === 'charts') {
+        this.$nextTick(() => {
+          this.showCharts();
+        });
+      }
+    },
+    parkingLots() {
+      if (this.activeTab === 'charts') {
+        this.$nextTick(() => {
+          this.showCharts();
+        });
+      }
     }
   }
 }

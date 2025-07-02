@@ -21,8 +21,8 @@ export default {
                 <td>{{ h.id }}</td>
                 <td>{{ h.location }}</td>
                 <td>{{ h.vehicle_no }}</td>
-                <td>{{ h.in }}</td>
-                <td>{{ h.out || '-' }}</td>
+                <td>{{ formatLocalTime(h.in) }}</td>
+                <td>{{ formatLocalTime(h.out) }}</td>
                 
                 <td>
                   <button v-if="!h.out" class="btn btn-sm btn-warning" @click="openRelease(h)">Release</button>
@@ -81,7 +81,9 @@ export default {
       </div>
       <div v-if="activeTab === 'summary'">
         <h5>Parking Summary</h5>
-        <canvas id="userSummaryChart" height="200"></canvas>
+        <div style="max-width:250px; margin:auto;">
+         <canvas id="userSummaryChart" width="250" height="120"></canvas>
+        </div>
       </div>
       <!-- Book Modal -->
       <div v-if="showBook" class="modal d-block" style="background:rgba(0,0,0,0.3)">
@@ -109,8 +111,8 @@ export default {
           <div class="modal-body">
             <div class="mb-2">Spot ID: <b>{{ releaseForm.spot_id }}</b></div>
             <div class="mb-2">Vehicle No: <b>{{ releaseForm.vehicle_no }}</b></div>
-            <div class="mb-2">Parking Time: <b>{{ releaseForm.in }}</b></div>
-            <div class="mb-2">Releasing Time: <b>{{ releaseForm.out }}</b></div>
+           <div class="mb-2">Parking Time: <b>{{ formatLocalTime(releaseForm.in) }}</b></div>
+           <div class="mb-2">Releasing Time: <b>{{ formatLocalTime(releaseForm.out) }}</b></div>
             <div class="mb-2">Total Cost: <b>{{ releaseForm.cost }}</b></div>
             <div v-if="error.release" class="text-danger small">{{ error.release }}</div>
           </div>
@@ -180,6 +182,41 @@ export default {
   },
   methods: {
     editProfile() { alert('Profile edit not implemented.'); },
+    formatLocalTime(utcString) {
+      if (!utcString) return '-';
+      const date = new Date(utcString);
+      if (isNaN(date)) return utcString;
+      return date.toLocaleString();
+    },
+     prepareChartData() {
+      const counts = {};
+      this.history.forEach(h => {
+        counts[h.location] = (counts[h.location] || 0) + 1;
+      });
+      return {
+        labels: Object.keys(counts),
+        data: Object.values(counts)
+      };
+    },
+    renderChart() {
+      if (!window.Chart) return;
+      const ctx = document.getElementById('userSummaryChart');
+      if (!ctx) return;
+      const { labels, data } = this.prepareChartData();
+      if (this._chart) this._chart.destroy();
+      
+      const colors = [
+        '#4caf50', '#2196f3', '#ff9800', '#e91e63', '#9c27b0', '#00bcd4', '#ffc107', '#8bc34a', '#f44336', '#607d8b'
+      ];
+      this._chart = new window.Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: labels.map((_, i) => colors[i % colors.length]) }]
+        },
+        options: { responsive: true, plugins: { legend: { display: true, position: 'bottom' } } }
+      });
+    },
     async fetchHistory() {
       this.loading.history = true; this.error.history = '';
       try {
@@ -312,6 +349,10 @@ export default {
       if (val === 'history') this.fetchHistory();
       if (val === 'book') { this.fetchLots(); this.fetchVehicles(); }
       if (val === 'vehicles') this.fetchVehicles();
+      if (val === 'summary') this.$nextTick(() => this.renderChart());
+    },
+    history() {
+      if (this.activeTab === 'summary') this.$nextTick(() => this.renderChart());
     }
   },
   mounted() {
