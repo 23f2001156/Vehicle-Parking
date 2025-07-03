@@ -1,4 +1,4 @@
-from flask import request, jsonify,render_template
+from flask import request, jsonify,render_template,send_from_directory
 from flask_security import auth_required, roles_accepted, current_user,roles_required
 from flask_security.utils import verify_password, hash_password
 from application.models import User, Role, ParkingLot, ParkingSpot, Reservation, Vehicle
@@ -6,7 +6,10 @@ from application.database import db
 from sqlalchemy import func
 from .utils import roles_list
 from app import app 
-from datetime import datetime
+from datetime import datetime,timezone
+from .task import csv_report,monthly_report,parking_status
+from celery.result import AsyncResult
+import time
 
 @app.route('/', methods = ['GET'])
 def home():
@@ -87,6 +90,22 @@ def profile():
         "username": current_user.username,
         "roles": [role.name for role in current_user.roles]
     }), 200
+
+
+@app.route('/api/export')
+def export_csv(): 
+    result= csv_report.delay()
+    return jsonify({
+        "id": result.id,
+        "result": result.result,
+    })
+
+
+@app.route('/api/csv_result/<id>')
+def csv_result(id):
+    res= AsyncResult(id)
+    return send_from_directory('static', res.result)
+
 
 
 #################### ADMIN ROUTES ###################
@@ -449,7 +468,6 @@ def user_book():
 
 @app.route('/api/user/release', methods=['POST'])
 @auth_required('token')
-@roles_required('user')
 def user_release():
     data = request.get_json()
     reservation_id = data.get('reservation_id')

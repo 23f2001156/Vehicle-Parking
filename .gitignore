@@ -3,3 +3,4 @@ venv/
 __pycache__/
 .webassets-cache
 mad2_venv/
+dump.rdb

@@ -80,7 +80,7 @@ export default {
         </div>
       </div>
 
-      <div v-if="activeTab === 'users'">
+      <div v-if="activeTab === 'users'" >
         <h4>Registered Users</h4>
         <table class="table table-striped">
           <thead>
@@ -129,6 +129,9 @@ export default {
 
       <div v-if="activeTab === 'charts'">
         <h4>Summary Reports</h4>
+        <div class="text-end">
+          <button @click="csvExport" class="btn btn-secondary">Download CSV report</button>
+        </div><br>
         <div class="row">
           <div class="col-md-6">
             <div class="card">
@@ -231,6 +234,7 @@ export default {
         alert('Error loading data: ' + error.message)
       }
     },
+
     
     async apiCall(endpoint, options = {}) {
       try {
@@ -249,6 +253,13 @@ export default {
         console.error('API call failed:', endpoint, error)
         throw error
       }
+    },
+     csvExport(){
+      fetch('/api/export')
+      .then(response => response.json())
+      .then(data => {
+        window.location.href = `/api/csv_result/${data.id}`
+      });
     },
     
     async loadSummary() {
@@ -411,3 +422,4 @@ export default {
     }
   }
 }
+

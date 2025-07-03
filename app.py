@@ -5,30 +5,31 @@ from application.models import User, Role
 from application.config import LocalDevelopmentConfig
 from flask_security import Security, SQLAlchemyUserDatastore
 from flask_security.utils import hash_password
+from application.celery_init import celery_init_app
+from celery.schedules import crontab
+from application.task import monthly_report
+
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(LocalDevelopmentConfig)
     db.init_app(app)
 
-    # Enable CORS for all origins (you can restrict origins if needed)
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8080", "http://127.0.0.1:8080"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "Authentication-Token"]
-        }
-    })
+    
+    CORS(app)
 
-    # Setup Flask-Security datastore and Security extension
+    
     datastore = SQLAlchemyUserDatastore(db, User, Role)
-    # Remove register_blueprint=False to allow Flask-Security routes
+
     app.security = Security(app, datastore)
 
     app.app_context().push()
     return app
 
 app = create_app()
+celery=celery_init_app(app)
+celery.autodiscover_tasks()
+
 
 with app.app_context():
     db.create_all()
@@ -36,7 +37,7 @@ with app.app_context():
     app.security.datastore.find_or_create_role(name="user", description="General user of app")
     db.session.commit()
 
-    # Create admin user if not exists
+   
     if not app.security.datastore.find_user(email="user0@admin.com"):
         app.security.datastore.create_user(
             email="user0@admin.com",
@@ -45,7 +46,7 @@ with app.app_context():
             roles=['admin']
         )
 
-    # Create regular user if not exists
+    
     if not app.security.datastore.find_user(email="user1@user.com"):
         app.security.datastore.create_user(
             email="user1@user.com",
@@ -57,6 +58,14 @@ with app.app_context():
 
 from application.routes import *
 
+@celery.on_after_finalize.connect
+def setup_periodic_tasks(sender, **kwargs):
+    sender.add_periodic_task(
+        crontab(minute = '*/2'),  
+        monthly_report.s(),
+    )
+    
+
+
 if __name__ == "__main__":
-    # Run in debug mode for easier development
     app.run(debug=True)
