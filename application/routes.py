@@ -4,10 +4,10 @@ from flask_security.utils import verify_password, hash_password
 from application.models import User, Role, ParkingLot, ParkingSpot, Reservation, Vehicle
 from application.database import db
 from sqlalchemy import func
-from .utils import roles_list
+from .utils import roles_list,send_gchat_notification
 from app import app 
 from datetime import datetime,timezone
-from .task import csv_report,monthly_report,parking_status
+from .task import csv_report,monthly_report,parking_status,notify_new_lot,daily_user_reminder
 from celery.result import AsyncResult
 import time
 
@@ -214,6 +214,9 @@ def create_parking_lot():
             db.session.add(spot)
         
         db.session.commit()
+        notify_new_lot.delay(lot.id)
+        
+        return jsonify({'message': 'Parking lot created successfully', 'id': lot.id}), 201
         
         
         return jsonify({'message': 'Parking lot created successfully', 'id': lot.id}), 201
@@ -478,6 +481,11 @@ def user_release():
     reservation.spot.status = 'A'
     reservation.calculate_cost(reservation.spot.lot.price_per_hour)
     db.session.commit()
+    from .utils import send_gchat_notification
+    send_gchat_notification(
+        current_user.username,
+        f"you have successfully released your parking spot. Your total cost was {reservation.parking_cost}."
+    )
     return jsonify({'message': 'Spot released', 'cost': reservation.parking_cost})
 
 @app.route('/api/user/vehicles', methods=['GET'])

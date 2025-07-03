@@ -1,11 +1,12 @@
 from celery import shared_task
-from .models import User, Reservation
+from .models import User, Reservation, ParkingLot
 import datetime
 import csv
-from .utils import format_report
+from .utils import format_report, send_gchat_notification
 from .mail import send_email
 import requests
 import json
+from datetime import date
 
 @shared_task(ignore_result=False, name="download_csv_report")
 def csv_report():
@@ -43,9 +44,8 @@ def monthly_report():
         user_reservations = []
         total_cost = 0.0
         
-        # Filter reservations for the current month and year
         for r in user.reservations:
-            # Ensure parking_timestamp exists and is within the current month and year
+           
             if r.parking_timestamp and \
                r.parking_timestamp.month == current_month_num and \
                r.parking_timestamp.year == current_year:
@@ -74,9 +74,42 @@ def monthly_report():
 
 
 
-@shared_task(ignore_result=False, name="daily_reminder")
+
+
+shared_task(ignore_result=False, name="daily_reminder")
 def parking_status(username):
     text = f"Hi {username}, Thank You for using ParkPal. Please check Your total at http://127.0.0.1:5000/api/user/reservations"
     response = requests.post("https://chat.googleapis.com/v1/spaces/AAQANUDtcQk/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=sYvUPeltiSJ6uFbOcQIC85VeCZK7f7iMbiIFbBOwC9g", json = {"text": text})
     print(response.status_code)
     return "Parking status updated"
+
+@shared_task(ignore_result=False, name="daily_user_reminder")
+def daily_user_reminder():
+    today = date.today()
+    users = User.query.all()
+    print(f"Running daily_user_reminder for {len(users)} users")
+    for user in users:
+        has_reservation_today = any(
+            r.parking_timestamp and r.parking_timestamp.date() == today
+            for r in user.reservations
+        )
+        print(f"User: {user.username}, has_reservation_today: {has_reservation_today}")
+        if not has_reservation_today:
+            print(f"Sending reminder to {user.username}")
+            send_gchat_notification(
+                user.username,
+                "you have not booked a parking spot today. Book now if needed! 🚗🅿️"
+            )
+    return "Daily reminders sent"
+
+@shared_task(ignore_result=False, name="notify_new_lot")
+def notify_new_lot(lot_id):
+    lot = ParkingLot.query.get(lot_id)
+    users = User.query.all()
+    for user in users:
+        send_gchat_notification(
+            user.username,
+            f"A new parking lot '{lot.prime_location_name}' is now available at {lot.address}! Book your spot if needed."
+        )
+    return "New lot notifications sent"
+    

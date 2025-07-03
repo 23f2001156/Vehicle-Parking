@@ -1,6 +1,6 @@
 from jinja2 import Template
 import os
-
+import requests
 def roles_list(roles):
     role_list = []
     for role in roles:
@@ -15,3 +15,9 @@ def format_report(html_template, data):
         template = Template(file.read())
         return template.render(**data) 
     
+
+
+def send_gchat_notification(username, message):
+    webhook_url = "https://chat.googleapis.com/v1/spaces/AAQANUDtcQk/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=sYvUPeltiSJ6uFbOcQIC85VeCZK7f7iMbiIFbBOwC9g"  # Replace with your actual webhook
+    text = f"Hi {username}, {message}"
+    requests.post(webhook_url, json={"text": text})
