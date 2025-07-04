@@ -10,6 +10,7 @@ from datetime import datetime,timezone
 from .task import csv_report,monthly_report,parking_status,notify_new_lot,daily_user_reminder
 from celery.result import AsyncResult
 import time
+from flask_cache import cache
 
 @app.route('/', methods = ['GET'])
 def home():
@@ -113,16 +114,15 @@ def csv_result(id):
 @app.route('/api/admin/summary', methods=['GET'])
 @auth_required('token')
 @roles_required('admin')
+@cache.cached(timeout=90, key_prefix='admin_summary')
 def get_summary():
-    """Get dashboard summary statistics"""
     try:
         total_lots = ParkingLot.query.count()
         
-        # Get spot statistics
+        
         available_spots = ParkingSpot.query.filter_by(status='A').count()
         occupied_spots = ParkingSpot.query.filter_by(status='O').count()
-        
-        # Get user count (excluding admins)
+       
         total_users = db.session.query(User).join(User.roles).filter(Role.name == 'user').count()
         
         return jsonify({
@@ -139,13 +139,12 @@ def get_summary():
 @auth_required('token')
 @roles_required('admin')
 def get_parking_lots():
-    """Get all parking lots with availability info"""
     try:
         lots = ParkingLot.query.all()
         
         result = []
         for lot in lots:
-            # Calculate available spots for each lot
+           
             available_spots = ParkingSpot.query.filter_by(lot_id=lot.id, status='A').count()
             revenue = db.session.query(func.sum(Reservation.parking_cost)) \
                 .join(ParkingSpot, Reservation.spot_id == ParkingSpot.id) \
@@ -238,25 +237,24 @@ def update_parking_lot(lot_id):
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        # Validate data types
+       
         try:
             price_per_hour = float(data['price_per_hour'])
             number_of_spots = int(data['number_of_spots'])
         except (ValueError, TypeError):
             return jsonify({'error': 'Invalid data types'}), 400
         
-        # Update basic info
         lot.prime_location_name = data['prime_location_name']
         lot.address = data.get('address', '')
         lot.pin_code = data.get('pin_code', '')
         lot.price_per_hour = price_per_hour
         
-        # Handle spot count changes
+      
         current_spot_count = ParkingSpot.query.filter_by(lot_id=lot_id).count()
         
         if number_of_spots != current_spot_count:
             if number_of_spots < current_spot_count:
-                # Remove excess spots (only if they're available)
+               
                 spots_to_remove = current_spot_count - number_of_spots
                 excess_spots = ParkingSpot.query.filter_by(lot_id=lot_id, status='A').limit(spots_to_remove).all()
                 
@@ -266,7 +264,7 @@ def update_parking_lot(lot_id):
                 for spot in excess_spots:
                     db.session.delete(spot)
             else:
-                # Add new spots
+              
                 spots_to_add = number_of_spots - current_spot_count
                 for i in range(spots_to_add):
                     spot = ParkingSpot(lot_id=lot_id, status='A')
@@ -285,7 +283,7 @@ def update_parking_lot(lot_id):
 @auth_required('token')
 @roles_required('admin')
 def delete_parking_lot(lot_id):
-    """Delete parking lot if all spots are empty"""
+    
     try:
         lot = ParkingLot.query.get_or_404(lot_id)
         
@@ -309,7 +307,7 @@ def delete_parking_lot(lot_id):
 @auth_required('token')
 @roles_required('admin')
 def get_parking_spots(lot_id):
-    """Get all spots for a specific parking lot with current reservation info"""
+    
     try:
         spots = ParkingSpot.query.filter_by(lot_id=lot_id).all()
         
@@ -435,6 +433,7 @@ def user_history():
     return jsonify(result)
 
 @app.route('/api/user/lots', methods=['GET'])
+@cache.cached(timeout=300, key_prefix='user_lots')
 @auth_required('token')
 @roles_required('user')
 def user_lots():
@@ -531,3 +530,12 @@ def delete_vehicle(vehicle_id):
     db.session.delete(vehicle)
     db.session.commit()
     return jsonify({'message': 'Vehicle deleted'})
+
+
+
+@app.route('/api/test-cache')
+@cache.cached(timeout=60,key_prefix='test_cache')
+def test_cache():
+    import time
+    now = time.time()
+    return jsonify({"cached_time": now})

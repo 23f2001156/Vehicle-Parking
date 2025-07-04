@@ -8,7 +8,7 @@ from flask_security.utils import hash_password
 from application.celery_init import celery_init_app
 from celery.schedules import crontab
 from application.task import monthly_report
-
+from flask_cache import init_cache
 
 def create_app():
     app = Flask(__name__)
@@ -64,8 +64,9 @@ def setup_periodic_tasks(sender, **kwargs):
         crontab(minute = '*/2'),  
         monthly_report.s(),
     )
-    
 
 
 if __name__ == "__main__":
     app.run(debug=True)
+    
+cache = init_cache(app)
