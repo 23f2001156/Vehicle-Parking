@@ -13,16 +13,10 @@ from flask_cache import init_cache
 def create_app():
     app = Flask(__name__)
     app.config.from_object(LocalDevelopmentConfig)
-    db.init_app(app)
-
-    
+    db.init_app(app)  
     CORS(app)
-
-    
     datastore = SQLAlchemyUserDatastore(db, User, Role)
-
     app.security = Security(app, datastore)
-
     app.app_context().push()
     return app
 

@@ -26,6 +26,7 @@ export default {
           <h4>Manage Parking Lots</h4>
           <button class="btn btn-primary" @click="openLotModal()">Add New Lot</button>
         </div>
+         <input class="form-control mb-3" v-model="lotSearch" placeholder="Search lots">
         
         <table class="table table-striped">
           <thead>
@@ -34,12 +35,13 @@ export default {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="lot in parkingLots" :key="lot.id">
+
+              <tr v-for="lot in filteredParkingLots" :key="lot.id">
               <td>{{ lot.id }}</td>
               <td>{{ lot.prime_location_name }}</td>
               <td>{{ lot.address }}</td>
               <td>{{ lot.pin_code }}</td>
-              <td>\${{ lot.price_per_hour }}</td>
+              <td>{{ lot.price_per_hour }}</td>
               <td>{{ lot.number_of_spots }}</td>
               <td>{{ lot.available_spots }}</td>
               <td>
@@ -58,9 +60,15 @@ export default {
           <option value="">Select a parking lot</option>
           <option v-for="lot in parkingLots" :key="lot.id" :value="lot.id">{{ lot.prime_location_name }}</option>
         </select>
+        
+         <select class="form-select mb-3" v-model="spotStatusFilter">
+          <option value="">All</option>
+          <option value="A">Available</option>
+          <option value="O">Occupied</option>
+        </select>
 
         <div v-if="selectedLotId" class="row">
-          <div class="col-md-4 mb-2" v-for="spot in parkingSpots" :key="spot.id">
+          <div class="col-md-4 mb-2" v-for="spot in filteredParkingSpots" :key="spot.id">
             <div class="card" :class="spot.status === 'A' ? 'border-success' : 'border-danger'">
               <div class="card-body text-center">
                 <h6>Spot #{{ spot.id }}</h6>
@@ -198,7 +206,9 @@ export default {
       selectedLotId: '',
       showLotModal: false,
       editingLot: false,
-      lotForm: { id: null, prime_location_name: '', address: '', pin_code: '', price_per_hour: 0, number_of_spots: 0 }
+      lotForm: { id: null, prime_location_name: '', address: '', pin_code: '', price_per_hour: 0, number_of_spots: 0 },
+      spotStatusFilter: '',
+      lotSearch: ''
     }
   },
   
@@ -211,6 +221,7 @@ export default {
         { title: 'Total Users', value: this.summary.totalUsers, class: 'bg-info' }
       ]
     },
+
     tabs() {
       return [
         { key: 'lots', name: 'Parking Lots' },
@@ -219,6 +230,19 @@ export default {
         { key: 'vehicles', name: 'Vehicles' },
         { key: 'charts', name: 'Reports' }
       ]
+    },
+    filteredParkingSpots() {
+      if (!this.spotStatusFilter) return this.parkingSpots;
+      return this.parkingSpots.filter(spot => spot.status === this.spotStatusFilter);
+    },
+    filteredParkingLots() {
+      if (!this.lotSearch) return this.parkingLots;
+      const term = this.lotSearch.toLowerCase();
+      return this.parkingLots.filter(lot =>
+        lot.prime_location_name.toLowerCase().includes(term) ||
+        (lot.address && lot.address.toLowerCase().includes(term)) ||
+        (lot.pin_code && lot.pin_code.toString().includes(term))
+      );
     }
   },
   

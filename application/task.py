@@ -113,3 +113,26 @@ def notify_new_lot(lot_id):
         )
     return "New lot notifications sent"
     
+@shared_task(ignore_result=False, name="download_user_csv_report")
+def user_csv_report(user_id):
+    from .models import Reservation
+    import datetime
+    import csv
+
+    reservations = Reservation.query.filter_by(user_id=user_id).all()
+    csv_file_name = f"resveration_{user_id}_{datetime.datetime.now().strftime('%f')}.csv"
+    with open(f'static/{csv_file_name}', 'w', newline="") as csvfile:
+        sr_no = 1
+        reservation_csv = csv.writer(csvfile, delimiter=',')
+        reservation_csv.writerow(['Sr No', 'Location', 'Spot id', 'Parking Time', 'Leaving Time', 'Cost'])
+        for r in reservations:
+            reservation_csv.writerow([
+                sr_no,
+                r.spot.lot.prime_location_name,
+                r.spot_id,
+                r.parking_timestamp,
+                r.leaving_timestamp,
+                r.parking_cost
+            ])
+            sr_no += 1
+    return csv_file_name

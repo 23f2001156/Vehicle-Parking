@@ -11,6 +11,7 @@ from .task import csv_report,monthly_report,parking_status,notify_new_lot,daily_
 from celery.result import AsyncResult
 import time
 from flask_cache import cache
+from .task import user_csv_report
 
 @app.route('/', methods = ['GET'])
 def home():
@@ -107,7 +108,18 @@ def csv_result(id):
     res= AsyncResult(id)
     return send_from_directory('static', res.result)
 
+@app.route('/api/user/export')
+def export_user_csv():
+    result = user_csv_report.delay(current_user.id)
+    return jsonify({
+        "id": result.id,
+        "result": result.result,
+    })
 
+@app.route('/api/user/csv_result/<id>')
+def user_csv_result(id):
+    res = AsyncResult(id)
+    return send_from_directory('static', res.result)
 
 #################### ADMIN ROUTES ###################
 

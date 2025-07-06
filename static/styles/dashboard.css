@@ -1,0 +1,124 @@
+/* Dashboard Container */
+.dashboard-container {
+    max-width: 1200px;
+    margin: 40px auto 0 auto;
+    padding: 30px 20px;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 8px 32px rgba(60, 60, 120, 0.08);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  /* Dashboard Title */
+  .dashboard-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 30px;
+    text-align: center;
+  }
+  
+  /* Cards Row */
+  .dashboard-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-bottom: 40px;
+    justify-content: center;
+  }
+  
+  .dashboard-card {
+    flex: 1 1 220px;
+    min-width: 220px;
+    background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%);
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(100, 100, 200, 0.07);
+    padding: 28px 20px;
+    text-align: center;
+    transition: transform 0.2s;
+  }
+  .dashboard-card:hover {
+    transform: translateY(-6px) scale(1.03);
+    box-shadow: 0 8px 32px rgba(100, 100, 200, 0.13);
+  }
+  .dashboard-card-title {
+    font-size: 1.1rem;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .dashboard-card-value {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #4f46e5;
+  }
+  
+  /* Charts Section */
+  .dashboard-charts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    margin-bottom: 40px;
+    justify-content: center;
+  }
+  .dashboard-chart {
+    flex: 1 1 350px;
+    min-width: 320px;
+    background: #f8fafc;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(100, 100, 200, 0.07);
+    padding: 24px 16px;
+    text-align: center;
+  }
+  
+  /* Table Section */
+  .dashboard-table-section {
+    margin-top: 30px;
+  }
+  .dashboard-table-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 16px;
+  }
+  .dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(100, 100, 200, 0.07);
+  }
+  .dashboard-table th, .dashboard-table td {
+    padding: 14px 12px;
+    text-align: left;
+  }
+  .dashboard-table th {
+    background: #e0e7ff;
+    color: #333;
+    font-weight: 600;
+  }
+  .dashboard-table tr:nth-child(even) {
+    background: #f3f4f6;
+  }
+  .dashboard-table tr:hover {
+    background: #e0e7ff;
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 900px) {
+    .dashboard-cards, .dashboard-charts {
+      flex-direction: column;
+      gap: 18px;
+    }
+    .dashboard-card, .dashboard-chart {
+      min-width: 0;
+    }
+  }
+  @media (max-width: 600px) {
+    .dashboard-container {
+      padding: 10px 2vw;
+    }
+    .dashboard-title {
+      font-size: 1.5rem;
+    }
+  }
