@@ -49,8 +49,7 @@ class ParkingLot(db.Model):
 
     spots = db.relationship('ParkingSpot', backref='lot', lazy=True, cascade='all, delete-orphan')
 
-    def __repr__(self):
-        return f'<ParkingLot {self.prime_location_name}>'
+    
 
 
 class ParkingSpot(db.Model):
@@ -61,8 +60,6 @@ class ParkingSpot(db.Model):
 
     reservations = db.relationship('Reservation', backref='spot', lazy=True, cascade='all, delete-orphan')
 
-    def __repr__(self):
-        return f'<ParkingSpot {self.id} - {self.status}>'
     
 class Vehicle(db.Model):
     __tablename__ = 'vehicle'
@@ -75,9 +72,7 @@ class Vehicle(db.Model):
     user = db.relationship('User', backref='vehicles')
     reservations = db.relationship('Reservation', backref='vehicle', lazy=True)
 
-    def __repr__(self):
-        return f'<Vehicle {self.vehicle_number}>'
-
+   
 class Reservation(db.Model):
     __tablename__ = 'reservation'
     id = db.Column(db.Integer, primary_key=True)
@@ -95,7 +90,3 @@ class Reservation(db.Model):
         else:
             self.parking_cost = 0.0
         return self.parking_cost
-
-    def __repr__(self):
-        return f'<Reservation {self.id} - User {self.user_id} - Spot {self.spot_id}>'
-    

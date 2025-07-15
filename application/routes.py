@@ -65,7 +65,7 @@ def login():
     if not user or not verify_password(password, user.password):
         return jsonify({"error": "Invalid credentials"}), 401
     if not user.active:
-        return jsonify({"error": "Your account is blocked,plz contact admin"})
+        return jsonify({"error": "Your account is blocked,plz contact admin"}), 403
 
     token = user.get_auth_token()
 
@@ -82,7 +82,7 @@ def login():
     }), 200
 
 
-@app.route('/api/profile', methods=['GET'])
+'''@app.route('/api/profile', methods=['GET'])
 @auth_required('token')
 @roles_accepted('user', 'admin')
 def profile():
@@ -91,7 +91,7 @@ def profile():
         "email": current_user.email,
         "username": current_user.username,
         "roles": [role.name for role in current_user.roles]
-    }), 200
+    }), 200'''
 
 
 @app.route('/api/export')
@@ -230,8 +230,6 @@ def create_parking_lot():
         return jsonify({'message': 'Parking lot created successfully', 'id': lot.id}), 201
         
         
-        return jsonify({'message': 'Parking lot created successfully', 'id': lot.id}), 201
-        
     except Exception as e:
         db.session.rollback()
         print(f"Error in create_parking_lot: {str(e)}")
@@ -241,7 +239,7 @@ def create_parking_lot():
 @auth_required('token')
 @roles_required('admin')
 def update_parking_lot(lot_id):
-    """Update parking lot details"""
+    
     try:
         lot = ParkingLot.query.get_or_404(lot_id)
         data = request.get_json()
@@ -417,8 +415,20 @@ def get_vehicles():
         })
     return jsonify(result)
 
+@app.route('/api/admin/force-release/<int:spot_id>', methods=['POST'])
+@auth_required('token')
+@roles_required('admin')
+def force_release_spot(spot_id):
+    spot = ParkingSpot.query.get_or_404(spot_id)
+    if spot.status != 'O':
+        return jsonify({'error': 'Spot is not occupied'}), 400
 
-
+    reservation = Reservation.query.filter_by(spot_id=spot_id, leaving_timestamp=None).first()
+    send_gchat_notification(
+        reservation.user.username,
+        "Admin requests you to urgently release your parking spot due to an emergency. Please vacate as soon as possible."
+    )
+    return jsonify({'message': f'GChat notification sent to {reservation.user.username}.'})
 
 
 #### USER ROUTES ####
@@ -445,7 +455,7 @@ def user_history():
     return jsonify(result)
 
 @app.route('/api/user/lots', methods=['GET'])
-@cache.cached(timeout=300, key_prefix='user_lots')
+@cache.cached(timeout=90, key_prefix='user_lots')
 @auth_required('token')
 @roles_required('user')
 def user_lots():

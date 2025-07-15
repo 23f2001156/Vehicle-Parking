@@ -26,7 +26,11 @@ export default {
 
         const data = await response.json()
         if (!response.ok) {
-          this.error = data.message || 'Registration failed'
+           if (response.status === 409) {
+            this.error = 'Email is already registered.';
+          } else {
+            this.error = data.message || 'Registration failed';
+          }
           return
         }
 

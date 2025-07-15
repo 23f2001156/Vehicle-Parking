@@ -14,7 +14,6 @@ class LocalDevelopmentConfig(Config):
     SECURITY_TOKEN_AUTHENTICATION_HEADER = "Authentication-Token"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Additional Flask-Security configurations
     SECURITY_URL_PREFIX = '/auth'
     SECURITY_LOGIN_URL = '/login'
     SECURITY_LOGOUT_URL = '/logout'

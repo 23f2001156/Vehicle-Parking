@@ -1,7 +1,7 @@
 export default {
   template: `
     <footer v-if="showFooter" class="bg-light text-center mt-5 p-3">
-      <p>© 2025 Fast Logistics Parking App</p>
+      <p>© 2025 ParkPal Parking App</p>
     </footer>
   `,
   computed:{

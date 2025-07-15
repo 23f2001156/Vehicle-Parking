@@ -58,7 +58,7 @@ export default {
         <h4>Parking Spots Status</h4>
         <select class="form-select mb-3" v-model="selectedLotId" @change="loadSpots">
           <option value="">Select a parking lot</option>
-          <option v-for="lot in parkingLots" :key="lot.id" :value="lot.id">{{ lot.prime_location_name }}</option>
+          <option v-for="lot in parkingLots" :key="lot.id" :value="lot.id">{{ lot.prime_location_name }} - {{ lot.address }}</option>
         </select>
         
          <select class="form-select mb-3" v-model="spotStatusFilter">
@@ -80,7 +80,12 @@ export default {
                   <strong>Since:</strong> {{ new Date(spot.current_reservation.parking_timestamp).toLocaleString() }} <br>
                   <strong>Vehicle:</strong> {{ spot.current_reservation.vehicle_no || 'N/A' }} {{ spot.current_reservation.vehicle_model || 'N/A' }} {{ spot.current_reservation.vehicle_color || 'N/A' }}
                   <br>
-                
+                  <button 
+                    v-if="spot.status === 'O'"
+                    class="btn btn-outline-secondary" 
+                    @click="forceRelease(spot.id)">
+                    Emergency Alert
+                  </button>
                 </div>
               </div>
             </div>
@@ -427,7 +432,20 @@ export default {
           }
         });
       }
-    }
+    },
+      async forceRelease(spotId) {
+     
+      try {
+        const data = await this.apiCall(`/api/admin/force-release/${spotId}`, {
+          method: 'POST'
+        });
+        console.log('API call result:', data);
+        alert(data.message || 'Notification sent');
+      } catch (err) {
+        console.error('API call error:', err);
+        alert('Error: ' + (err.message || JSON.stringify(err)));
+      }
+    },
   },
   watch: {
     activeTab(newTab) {
